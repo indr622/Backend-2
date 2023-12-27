@@ -1,0 +1,95 @@
+-- 1. Tampilkan seluruh data dari tabel "employees"
+SELECT *
+FROM employees
+ORDER BY joined_date DESC;
+
+-- 2. Berapa banyak karyawan yang memiliki posisi pekerjaan (job title) "Manager"?
+SELECT count(employee_id) as employee_manager
+FROM employees
+WHERE job_title = 'Manager';
+
+-- 3.Tampilkan daftar nama dan gaji (salary) dari karyawan yang bekerja di departemen "Sales" atau "Marketing"
+SELECT name, salary, department
+FROM employees
+WHERE department IN ('Sales', 'Marketing')
+ORDER BY name ASC;
+
+-- 4.Hitung rata-rata gaji (salary) dari karyawan yang bergabung (joined) dalam 5 tahun terakhir (berdasarkan kolom "joined_date")
+SELECT AVG(salary) AS average_salary
+FROM employees
+WHERE joined_date >= CURRENT_DATE - INTERVAL '5 years';
+
+-- 5. Tampilkan 5 karyawan dengan total penjualan (sales) tertinggi dari tabel "employees" dan "sales_data"
+SELECT emp.employee_id,
+       emp.name,
+       emp.job_title,
+       emp.salary,
+       emp.department,
+       emp.joined_date,
+       SUM(sales.sales) AS total_sales
+FROM employees emp
+         JOIN sales_data sales ON emp.employee_id = sales.employee_id
+GROUP BY emp.employee_id, emp.name, emp.job_title, emp.salary, emp.department, emp.joined_date
+ORDER BY total_sales DESC
+LIMIT 5;
+
+-- 6.Tampilkan nama, gaji (salary), dan rata-rata gaji (salary) dari semua karyawan yang bekerja di departemen
+-- yang memiliki rata-rata gaji lebih tinggi dari gaji rata-rata di semua departemen
+WITH department_avg_salary AS (SELECT department,
+                                      AVG(salary) AS average_salary
+                               FROM employees
+                               GROUP BY department)
+
+SELECT emp.name,
+       emp.salary,
+       dept.average_salary
+FROM employees emp
+         JOIN
+     department_avg_salary dept ON emp.department = dept.department
+WHERE emp.salary > dept.average_salary;
+
+
+-- 7.Tampilkan nama dan total penjualan (sales) dari setiap karyawan, bersama dengan peringkat (ranking)
+-- masing-masing karyawan berdasarkan total penjualan. Peringkat 1 adalah karyawan dengan total
+-- penjualan tertinggi
+WITH TotalSalesPerEmployee AS (SELECT emp.employee_id,
+                                      emp.name,
+                                      COALESCE(SUM(sales.sales), 0) AS total_sales
+                               FROM employees emp
+                                        LEFT JOIN
+                                    sales_data sales ON emp.employee_id = sales.employee_id
+                               GROUP BY emp.employee_id, emp.name)
+
+SELECT employee_id,
+       name,
+       total_sales,
+       RANK() OVER (ORDER BY total_sales DESC) AS sales_rank
+FROM TotalSalesPerEmployee
+ORDER BY sales_rank;
+
+-- Buat sebuah stored procedure yang menerima nama departemen sebagai input, dan mengembalikan
+-- daftar karyawan dalam departemen tersebut bersama dengan total gaji (salary) yang mereka terima
+CREATE OR REPLACE FUNCTION get_department_employees(IN p_department_name VARCHAR)
+    RETURNS TABLE
+            (
+                employee_id BIGINT,
+                name        VARCHAR,
+                job_title   VARCHAR,
+                salary      BIGINT
+            )
+AS
+$$
+BEGIN
+    RETURN QUERY
+        SELECT emp.employee_id,
+               emp.name,
+               emp.job_title,
+               emp.salary
+        FROM employees emp
+        WHERE emp.department = p_department_name;
+
+    RETURN;
+END;
+$$ LANGUAGE plpgsql;
+SELECT * FROM get_department_employees('IT');
+
